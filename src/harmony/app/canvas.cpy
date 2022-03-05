@@ -18,6 +18,7 @@ bool path_exists(const std::string &s):
   return (stat (s.c_str(), &buffer) == 0);
 
 #define LAYER_DIR SAVE_DIR "/current"
+#define UNTITLED "Untitled"
 namespace app_ui:
 
   class Layer:
@@ -101,7 +102,7 @@ namespace app_ui:
     int stroke_width = 1
     remarkable_color stroke_color = BLACK
     int page_idx = 0
-    string project_name = "Untitled"
+    string project_name = UNTITLED
 
     bool erasing = false
     bool full_redraw = false
@@ -159,6 +160,7 @@ namespace app_ui:
       memset(vfb->fbmem, WHITE, self.byte_size)
       self.layers.clear()
       self.select_layer(self.new_layer())
+      self.project_name = UNTITLED
 
       self.curr_brush->reset()
       self.layers[cur_layer].push_undo()
@@ -227,7 +229,7 @@ namespace app_ui:
 
     // {{{ SAVING / LOADING
     string save_png():
-      char filename[100]
+      char filename[PATH_MAX]
       datestr := self.vfb->get_date()
       datecstr := datestr.c_str()
       sprintf(filename, "%s/%s-%s%s", SAVE_DIR,
@@ -249,7 +251,7 @@ namespace app_ui:
           else
             sfb._set_pixel(j, i, WHITE)
 
-      char filename[100]
+      char filename[PATH_MAX]
       datestr := self.vfb->get_date()
       datecstr := datestr.c_str()
       sprintf(filename, "%s/%s-%s%s", SAVE_DIR,
@@ -307,9 +309,10 @@ namespace app_ui:
       load_project_from_dir(LAYER_DIR)
 
       // set the project name to the filename minus the '.hrm' extension
-      file_tokens := str_utils::split(filename, '/')
-      last_token := file_tokens[file_tokens.size()-1]
-      self.project_name = last_token.substr(0, last_token.length() - 4)
+      dir_tokens := str_utils::split(filename, '/')
+      last_token := dir_tokens[dir_tokens.size()-1]
+      file_tokens := str_utils::split(last_token, '.')
+      self.project_name = file_tokens[0]
 
     void load_project_from_dir(string dir):
       vector<string> filenames = util::lsdir(dir, ".raw")
@@ -338,13 +341,10 @@ namespace app_ui:
 
 
     // we tack on ".hrm" to the filename
-    void save_project(string filename):
-      if filename == "" or filename[0] == '.':
-        return
-
-      out_file := filename + ".hrm"
-      out_dir := string(SAVE_DIR) + "/" + filename
-      debug "OUT DIR IS", out_dir
+    void save_project(bool overwrite=false):
+      debug "Saving Project", self.project_name
+      out_file := "tmp.hrm"
+      out_dir := string(SAVE_DIR) + "/tmp/"
 
       run_command("mkdir", { out_dir })
       for auto layer : self.layers:
@@ -355,15 +355,24 @@ namespace app_ui:
       if chdir(out_dir.c_str()) == -1:
         debug "ERR CHANGING DIRECTORIES", strerror(errno), out_dir
         return
+
       filenames := util::lsdir(".", ".raw")
       tar_args := vector<string>{"-cvzf", out_file}
       for i := 0; i < filenames.size(); i++:
         tar_args.push_back(filenames[i].c_str())
-
       run_command("tar", tar_args)
-      run_command("mv", {out_file, "../"})
+
+      datestr := self.vfb->get_date()
+      datecstr := datestr.c_str()
+      char filename[PATH_MAX]
+      sprintf(filename, "../%s.%s.hrm", self.project_name.c_str(), datecstr)
+      run_command("mv", {out_file, filename})
       __ := chdir(curdir)
       run_command("rm", {out_dir, "-rf"})
+
+      pf := string(filename)
+      pf = pf.substr(3, pf.length())
+      debug "SAVED PROJECT AS", pf
 
     // }}}
 

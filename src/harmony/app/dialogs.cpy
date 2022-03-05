@@ -51,9 +51,8 @@ namespace app_ui:
         ui::ConfirmationDialog::before_render()
 
       void on_button_selected(string t):
-        debug t, "Saving Project", canvas->project_name
         if t == "OK":
-          canvas->save_project(canvas->project_name)
+          canvas->save_project()
 
         ui::MainLoop::hide_overlay()
 
