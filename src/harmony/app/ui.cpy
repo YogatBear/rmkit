@@ -443,7 +443,7 @@ namespace app_ui:
         ds->add_options({canvas->layers[i].name})
       ds->add_options({"---"})
 
-      ds->add_options({"Settings"})
+      ds->add_options({"Manage"})
 
       self.scene = NULL
 
@@ -456,7 +456,7 @@ namespace app_ui:
       name := self.options[idx]->name
       if name == "New Layer":
         self.canvas->select_layer(self.canvas->new_layer())
-      else if name == "Settings":
+      else if name == "Manage":
         self.ld->populate_and_show()
       else if name == "..." or name == "---":
         pass
