@@ -303,8 +303,6 @@ namespace app_ui:
 
     void on_button_selected(string name):
       debug "Button Selected:", name
-      if name.find("Layer") == 0:
-        on_row_selected(name)
 
       if name == "New Layer":
         debug "Adding New Layer"
@@ -341,6 +339,8 @@ namespace app_ui:
         canvas->select_layer(layer_id-1)
       else if name == "Hide" or name == "Show":
         canvas->toggle_layer(canvas->cur_layer)
+      else:
+        on_row_selected(name)
 
       self.populate_and_show()
 
@@ -407,7 +407,7 @@ namespace app_ui:
 
       // row->pack_end(merge_button)
       // Layer Button
-      d := new ui::DialogButton(0, 0, self.w - 40 - offset, self.opt_h, self, option)
+      d := new ui::DialogButton(0, 0, self.w - 60 - offset, self.opt_h, self, option)
       d->x_padding = 10
       d->y_padding = 5
       if option == canvas->layers[canvas->cur_layer].name
