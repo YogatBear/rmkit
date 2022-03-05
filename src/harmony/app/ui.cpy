@@ -295,8 +295,6 @@ namespace app_ui:
       button_bar->pack_start(make_button("Import"))
       button_bar->pack_end(make_button("Delete"), 10)
       button_bar->pack_end(make_button("Export"))
-      button_bar->pack_end(make_button("v", 50))
-      button_bar->pack_end(make_button("^", 50))
 
       if canvas->is_layer_visible(canvas->cur_layer):
         button_bar->pack_end(make_button("Hide"))
@@ -341,13 +339,6 @@ namespace app_ui:
         canvas->delete_layer(layer_id)
         canvas->select_layer(0)
         canvas->select_layer(layer_id-1)
-      else if name == "^":
-        canvas->swap_layers(canvas->cur_layer, canvas->cur_layer+1)
-        canvas->select_layer(canvas->cur_layer+1)
-        pass
-      else if name == "v":
-        canvas->swap_layers(canvas->cur_layer, canvas->cur_layer-1)
-        canvas->select_layer(canvas->cur_layer-1)
       else if name == "Hide" or name == "Show":
         canvas->toggle_layer(canvas->cur_layer)
 
@@ -360,11 +351,12 @@ namespace app_ui:
         options.push_back(canvas->layers[i].name)
 
     string visible_icon(int i):
-      return canvas->is_layer_visible(i) ? "V" : "H"
+      return canvas->is_layer_visible(i) ? "S" : "H"
 
     void render_row(ui::HorizontalLayout *row, string option):
       self.layout->pack_start(row)
       layer_id := canvas->get_layer_idx(option)
+      selected_layer := canvas->layers[canvas->cur_layer].name
       bw := 150
       offset := 0
       style := ui::Stylesheet().justify_left().valign_middle()
@@ -380,6 +372,24 @@ namespace app_ui:
       ;
       offset += 50
       visible_button->set_style(style.justify_center())
+
+      up_button := new ui::Button(0, 0, 50, self.opt_h, "^")
+      up_button->mouse.click += PLS_LAMBDA(auto &ev):
+        canvas->swap_layers(layer_id, layer_id+1)
+        canvas->select_layer(selected_layer)
+        self.populate_and_show()
+      ;
+      offset += 50
+      up_button->set_style(style.justify_center())
+
+      down_button := new ui::Button(0, 0, 50, self.opt_h, "v")
+      down_button->mouse.click += PLS_LAMBDA(auto &ev):
+        canvas->swap_layers(layer_id, layer_id-1)
+        canvas->select_layer(selected_layer)
+        self.populate_and_show()
+      ;
+      offset += 50
+      down_button->set_style(style.justify_center())
 
       rename_button := new ui::Button(0, 0, 100, self.opt_h, "Rename")
       rename_button->mouse.click += PLS_LAMBDA(auto &ev):
@@ -408,6 +418,8 @@ namespace app_ui:
       row->pack_start(visible_button)
       row->pack_start(d)
       row->pack_end(rename_button, 10)
+      row->pack_end(down_button, 10)
+      row->pack_end(up_button, 10)
 
   class LayerButton: public ui::TextDropdown:
     public:
