@@ -295,7 +295,8 @@ namespace app_ui:
       button_bar->pack_start(make_button("Import"))
       button_bar->pack_end(make_button("Delete"), 10)
       button_bar->pack_end(make_button("Export"))
-
+      button_bar->pack_end(make_button("v", 50))
+      button_bar->pack_end(make_button("^", 50))
       if canvas->is_layer_visible(canvas->cur_layer):
         button_bar->pack_end(make_button("Hide"))
       else:
@@ -339,6 +340,13 @@ namespace app_ui:
         canvas->select_layer(layer_id-1)
       else if name == "Hide" or name == "Show":
         canvas->toggle_layer(canvas->cur_layer)
+      else if name == "^":
+        canvas->swap_layers(canvas->cur_layer, canvas->cur_layer+1)
+        canvas->select_layer(canvas->cur_layer+1)
+        pass
+      else if name == "v":
+        canvas->swap_layers(canvas->cur_layer, canvas->cur_layer-1)
+        canvas->select_layer(canvas->cur_layer-1)
       else:
         on_row_selected(name)
 
