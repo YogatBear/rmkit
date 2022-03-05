@@ -331,9 +331,11 @@ namespace app_ui:
             self.fb->width, self.fb->height),
           self.byte_size,
           true)
-        layer.fb->dirty_area = {0, 0, self.fb->width, self.fb->height}
         layer.name = name
-
+        snapshot := make_shared<framebuffer::Snapshot>(w, h)
+        snapshot->compress(layer.fb->fbmem, self.byte_size)
+        layer.undo_stack.push_back(snapshot)
+        layer.fb->dirty_area = {0, 0, self.fb->width, self.fb->height}
         self.layers.push_back(layer)
 
       self.select_layer(layers.size() - 1)
