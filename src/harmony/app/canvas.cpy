@@ -159,6 +159,7 @@ namespace app_ui:
       memset(self.fb->fbmem, WHITE, self.byte_size)
       memset(vfb->fbmem, WHITE, self.byte_size)
       self.layers.clear()
+      reset_layer_dir()
       self.select_layer(self.new_layer())
       self.project_name = UNTITLED
 
