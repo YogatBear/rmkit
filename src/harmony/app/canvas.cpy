@@ -423,8 +423,10 @@ namespace app_ui:
     void delete_layer(int i):
       self.clear_layer(i)
       run_command("rm", { self.layers[i].fb->filename})
-      if layers.size() > 1:
-        layers.erase(layers.begin() + i)
+      layers.erase(layers.begin() + i)
+
+      if layers.size() == 0:
+        self.select_layer(self.new_layer())
       mark_redraw()
 
     void clear_layer(int i):
