@@ -338,6 +338,9 @@ namespace app_ui:
         layer.fb->dirty_area = {0, 0, self.fb->width, self.fb->height}
         self.layers.push_back(layer)
 
+      if layers.size() == 0:
+        self.select_layer(self.new_layer())
+
       self.select_layer(layers.size() - 1)
       self.mark_redraw()
 
