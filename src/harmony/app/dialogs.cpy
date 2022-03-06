@@ -43,7 +43,7 @@ namespace app_ui:
         self.contentWidget = self.projectInput
         self.projectInput->events.done += PLS_LAMBDA(string text):
           self.mark_redraw()
-          canvas->project_name = text
+          canvas->set_project_name(text)
         ;
 
       void before_render():

@@ -145,6 +145,11 @@ namespace app_ui:
       self.stroke_width = s
       self.curr_brush->set_stroke_width(s)
 
+    void sanitize_filename(string &name):
+      for i := 0; i < name.length(); i++:
+        if name[i] == '/':
+          name[i] = '_'
+
     auto get_stroke_width():
       return self.curr_brush->stroke_val
 
@@ -229,7 +234,12 @@ namespace app_ui:
         layers[i].fb->reset_dirty(layers[i].fb->dirty_area)
 
     // {{{ SAVING / LOADING
+    void set_project_name(string n):
+      self.project_name = n
+      sanitize_filename(self.project_name)
+
     string save_png():
+      sanitize_filename(self.project_name)
       char filename[PATH_MAX]
       datestr := self.vfb->get_date()
       datecstr := datestr.c_str()
@@ -252,6 +262,7 @@ namespace app_ui:
           else
             sfb._set_pixel(j, i, WHITE)
 
+      sanitize_filename(layer.name)
       char filename[PATH_MAX]
       datestr := self.vfb->get_date()
       datecstr := datestr.c_str()
@@ -348,6 +359,7 @@ namespace app_ui:
 
     // we tack on ".hrm" to the filename
     void save_project(bool overwrite=false):
+      sanitize_filename(self.project_name)
       debug "Saving Project", self.project_name
       out_file := "tmp.hrm"
       out_dir := string(SAVE_DIR) + "/tmp/"
@@ -435,6 +447,7 @@ namespace app_ui:
       mark_redraw()
 
     void rename_layer(int layer_id, string layer_name):
+      sanitize_filename(layer_name)
       &layer := self.layers[layer_id]
 
       char filename[PATH_MAX]
