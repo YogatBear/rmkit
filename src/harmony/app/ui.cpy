@@ -216,7 +216,7 @@ namespace app_ui:
       self.text = ""
 
     void render():
-      if self.canvas->layers[canvas->cur_layer].undo_stack.size() > 1:
+      if self.canvas->undo_stack.size() > 1:
         ui::Button::render()
 
     void on_mouse_click(input::SynMotionEvent &ev):
@@ -247,7 +247,7 @@ namespace app_ui:
       self.text = ""
 
     void render():
-      if self.canvas->layers[canvas->cur_layer].redo_stack.size():
+      if self.canvas->redo_stack.size():
         ui::Button::render()
 
     void on_mouse_click(input::SynMotionEvent &ev):

@@ -28,8 +28,6 @@ namespace app_ui:
     int w, h
     string name = ""
     shared_ptr<framebuffer::FileFB> fb
-    deque<shared_ptr<framebuffer::Snapshot>> undo_stack;
-    deque<shared_ptr<framebuffer::Snapshot>> redo_stack;
 
     Layer(int _w, _h, shared_ptr<framebuffer::FileFB> _fb, int _byte_size, bool _visible):
       w = _w
@@ -47,53 +45,23 @@ namespace app_ui:
     void set_name(string n):
       name = n
 
-    // {{{ UNDO / REDO STUFF
-    void trim_stacks():
-      while UNDO_STACK_SIZE > 0 && self.undo_stack.size() > UNDO_STACK_SIZE:
-        self.undo_stack.pop_front()
-      while UNDO_STACK_SIZE > 0 && self.redo_stack.size() > UNDO_STACK_SIZE:
-        self.redo_stack.pop_front()
+  class LayerState: public Layer:
+    public:
+    shared_ptr<framebuffer::Snapshot> snapshot
+    string filename
 
-    void push_undo():
-      if STATE.disable_history:
-        return
+    LayerState(const Layer &layer): Layer(layer)
+      fb = NULL
+      filename = layer.fb->filename
+      snapshot = make_shared<framebuffer::Snapshot>(w, h)
 
-      dirty_rect := self.fb->dirty_area
-      debug "ADDING TO UNDO STACK, DIRTY AREA IS", \
-        dirty_rect.x0, dirty_rect.y0, dirty_rect.x1, dirty_rect.y1
-      remarkable_color* fbcopy = (remarkable_color*) malloc(self.byte_size)
-      memcpy(fbcopy, fb->fbmem, self.byte_size)
+      // TODO: make Snapshot and copy fbmem into it
 
-      ui::TaskQueue::add_task([=]() {
-        snapshot := make_shared<framebuffer::Snapshot>(w, h)
-        snapshot->compress(fbcopy, self.byte_size)
-        free(fbcopy)
+  struct SaveState:
+    vector<LayerState> layers
+    int cur_layer
+  ;
 
-
-        self.undo_stack.push_back(snapshot)
-        self.redo_stack.clear()
-
-        trim_stacks()
-      })
-
-
-    void undo():
-      if self.undo_stack.size() > 1:
-        // put last fb from undo stack into fb
-        self.redo_stack.push_back(self.undo_stack.back())
-        self.undo_stack.pop_back()
-        undofb := self.undo_stack.back()
-        undofb.get()->decompress(self.fb->fbmem)
-        ui::MainLoop::full_refresh()
-
-    void redo():
-      if self.redo_stack.size() > 0:
-        redofb := self.redo_stack.back()
-        self.redo_stack.pop_back()
-        redofb.get()->decompress(self.fb->fbmem)
-        self.undo_stack.push_back(redofb)
-        ui::MainLoop::full_refresh()
-    // }}}
 
   class Canvas: public ui::Widget:
     public:
@@ -108,6 +76,9 @@ namespace app_ui:
     bool full_redraw = false
 
     shared_ptr<framebuffer::VirtualFB> vfb
+
+    deque<SaveState> undo_stack;
+    deque<SaveState> redo_stack;
 
     vector<Layer> layers
     int cur_layer = 0
@@ -163,13 +134,15 @@ namespace app_ui:
     void reset():
       memset(self.fb->fbmem, WHITE, self.byte_size)
       memset(vfb->fbmem, WHITE, self.byte_size)
+      self.delete_layers()
       self.layers.clear()
       reset_layer_dir()
       self.select_layer(self.new_layer())
       self.project_name = UNTITLED
 
+//      self.push_undo()
+
       self.curr_brush->reset()
-      self.layers[cur_layer].push_undo()
       mark_redraw()
 
     void set_brush(Brush* brush):
@@ -195,8 +168,8 @@ namespace app_ui:
     void on_mouse_up(input::SynMotionEvent &ev):
       brush := self.erasing ? self.eraser : self.curr_brush
       brush->stroke_end()
-      self.layers[cur_layer].push_undo()
       brush->update_last_pos(-1,-1,-1,-1,-1)
+      self.push_undo()
       self.dirty = 1
       ui::MainLoop::refresh()
 
@@ -216,7 +189,8 @@ namespace app_ui:
       self.full_redraw = true
       px_width, px_height = self.fb->get_display_size()
       vfb->dirty_area = {0, 0, px_width, px_height}
-      layers[cur_layer].fb->dirty_area = {0, 0, px_width, px_height}
+      if cur_layer >= 0 and cur_layer < layers.size():
+        layers[cur_layer].fb->dirty_area = {0, 0, px_width, px_height}
 
     void render():
       render_layers()
@@ -314,6 +288,10 @@ namespace app_ui:
       run_command("rm", {"-rf", LAYER_DIR})
       run_command("mkdir", {LAYER_DIR})
 
+    void delete_layers():
+      for int i = 0; i < layers.size(); i++:
+        self.delete_layer(i, true)
+
 
     void load_project(string filename):
       reset_layer_dir()
@@ -330,6 +308,7 @@ namespace app_ui:
       vector<string> filenames = util::lsdir(dir, ".raw")
       sort(filenames.begin(), filenames.end())
 
+      self.delete_layers()
       self.layers.clear()
       for auto f : filenames:
         tokens := str_utils::split(f, '.')
@@ -344,16 +323,15 @@ namespace app_ui:
           self.byte_size,
           true)
         layer.name = name
-        snapshot := make_shared<framebuffer::Snapshot>(w, h)
-        snapshot->compress(layer.fb->fbmem, self.byte_size)
-        layer.undo_stack.push_back(snapshot)
         layer.fb->dirty_area = {0, 0, self.fb->width, self.fb->height}
         self.layers.push_back(layer)
+
 
       if layers.size() == 0:
         self.select_layer(self.new_layer())
 
       self.select_layer(layers.size() - 1)
+      self.push_undo()
       self.mark_redraw()
 
 
@@ -394,13 +372,86 @@ namespace app_ui:
 
     // }}}
 
-    // {{{ UNDO / REDO
+    // {{{ UNDO / REDO STUFF
+    void trim_stacks():
+      while UNDO_STACK_SIZE > 0 && self.undo_stack.size() > UNDO_STACK_SIZE:
+        self.undo_stack.pop_front()
+      while UNDO_STACK_SIZE > 0 && self.redo_stack.size() > UNDO_STACK_SIZE:
+        self.redo_stack.pop_front()
+
+    void clear_undo():
+      self.undo_stack.clear()
+      self.redo_stack.clear()
+
+    // need to go through each layer and save its snapshot
+    void push_undo():
+      if STATE.disable_history:
+        return
+
+      dirty_rect := self.fb->dirty_area
+      debug "ADDING TO UNDO STACK, DIRTY AREA IS", \
+        dirty_rect.x0, dirty_rect.y0, dirty_rect.x1, dirty_rect.y1
+
+
+      ui::TaskQueue::add_task([&] {
+        SaveState ss = {}
+        ss.cur_layer = self.cur_layer
+        for auto &layer : layers:
+          LayerState ls(layer)
+          ss.layers.push_back(ls)
+
+          snapshot := make_shared<framebuffer::Snapshot>(w, h)
+          debug "COMPRESSING LAYER", layer.name, layer.fb->fbmem
+          ls.snapshot->compress(layer.fb->fbmem, self.byte_size)
+
+        self.undo_stack.push_back(ss)
+        self.redo_stack.clear()
+        self.trim_stacks()
+      })
+
+
     void undo():
-      self.layers[cur_layer].undo()
-      mark_redraw()
+      if self.undo_stack.size() > 1:
+        // put last fb from undo stack into fb
+        self.redo_stack.push_back(self.undo_stack.back())
+        self.undo_stack.pop_back()
+        undofb := self.undo_stack.back()
+
+        debug "UNDO HAS", undofb.layers.size(), "LAYERS, CUR IS", undofb.cur_layer
+        self.delete_layers()
+        self.layers.clear()
+
+        for auto &sl : undofb.layers:
+          debug "UNDOING LAYER", sl.name
+          Layer layer(sl)
+          layer.fb = make_shared<framebuffer::FileFB>(sl.filename, sl.w, sl.h)
+          sl.snapshot->decompress(layer.fb->fbmem)
+          self.layers.push_back(layer)
+
+        self.select_layer(undofb.cur_layer)
+
+
+        ui::MainLoop::full_refresh()
+
     void redo():
-      self.layers[cur_layer].redo()
-      mark_redraw()
+      if self.redo_stack.size() > 0:
+        redofb := self.redo_stack.back()
+        self.redo_stack.pop_back()
+
+        debug "REDO HAS", redofb.layers.size(), "LAYERS, CUR IS", redofb.cur_layer
+        self.delete_layers()
+        self.layers.clear()
+        for auto &sl : redofb.layers:
+          debug "REDOING LAYER", sl.name
+          Layer layer(sl)
+          layer.fb = make_shared<framebuffer::FileFB>(sl.filename, sl.w, sl.h)
+          sl.snapshot->decompress(layer.fb->fbmem)
+          self.layers.push_back(layer)
+        self.select_layer(redofb.cur_layer)
+
+
+        self.undo_stack.push_back(redofb)
+        ui::MainLoop::full_refresh()
     // }}}
 
     // {{{ LAYER STUFF
@@ -412,7 +463,7 @@ namespace app_ui:
         idx++
       return -1
 
-    int new_layer():
+    int new_layer(bool undoable=true):
       int layer_id = layers.size()
       char filename[PATH_MAX]
       layer_name := "Layer " + to_string(layers.size())
@@ -428,17 +479,19 @@ namespace app_ui:
       self.layers.push_back(layer)
 
       self.clear_layer(layer_id)
-      self.layers[layer_id].push_undo()
+      if undoable:
+        self.push_undo()
       debug "CREATED LAYER", layer_id
 
       return layer_id
 
-    void delete_layer(int i):
+    void delete_layer(int i, bool allow_empty=false):
       self.clear_layer(i)
       run_command("rm", { self.layers[i].fb->filename})
       layers.erase(layers.begin() + i)
+//      self.push_undo()
 
-      if layers.size() == 0:
+      if layers.size() == 0 and !allow_empty:
         self.select_layer(self.new_layer())
       mark_redraw()
 
