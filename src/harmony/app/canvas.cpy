@@ -28,6 +28,8 @@ namespace app_ui:
     int w, h
     string name = ""
     shared_ptr<framebuffer::FileFB> fb
+    shared_ptr<framebuffer::Snapshot> snapshot
+    bool dirty = 0
 
     Layer(int _w, _h, shared_ptr<framebuffer::FileFB> _fb, int _byte_size, bool _visible):
       w = _w
@@ -47,13 +49,11 @@ namespace app_ui:
 
   class LayerState: public Layer:
     public:
-    shared_ptr<framebuffer::Snapshot> snapshot
     string filename
 
     LayerState(const Layer &layer): Layer(layer)
       fb = NULL
       filename = layer.fb->filename
-      snapshot = make_shared<framebuffer::Snapshot>(w, h)
 
       // TODO: make Snapshot and copy fbmem into it
 
@@ -169,6 +169,10 @@ namespace app_ui:
       brush := self.erasing ? self.eraser : self.curr_brush
       brush->stroke_end()
       brush->update_last_pos(-1,-1,-1,-1,-1)
+
+      // we invalidate the layer snapshot after modifying the layer
+      // so the save system knows about it
+      self.layers[self.cur_layer].snapshot = NULL
       self.push_undo()
       self.dirty = 1
       ui::MainLoop::refresh()
@@ -397,18 +401,55 @@ namespace app_ui:
         SaveState ss = {}
         ss.cur_layer = self.cur_layer
         for auto &layer : layers:
+          if layer.snapshot == NULL:
+            layer.snapshot = make_shared<framebuffer::Snapshot>(w, h)
+            debug "COMPRESSING LAYER", layer.name, layer.fb->fbmem
+            layer.snapshot->compress(layer.fb->fbmem, self.byte_size)
+
           LayerState ls(layer)
           ss.layers.push_back(ls)
-
-          snapshot := make_shared<framebuffer::Snapshot>(w, h)
-          debug "COMPRESSING LAYER", layer.name, layer.fb->fbmem
-          ls.snapshot->compress(layer.fb->fbmem, self.byte_size)
 
         self.undo_stack.push_back(ss)
         self.redo_stack.clear()
         self.trim_stacks()
       })
 
+    void restore_layers(SaveState &undofb):
+      layers_modified := false
+
+      if layers.size() != undofb.layers.size():
+        layers_modified = true
+      else:
+        // TODO: sort layers by the sorting of undofb.layers,
+        // then check if they line up
+        for i := 0; i < layers.size(); i++:
+          &layer := layers[i]
+          &sl := undofb.layers[i]
+          if layer.name != sl.name:
+            layers_modified = true
+            break
+
+      if layers_modified:
+        self.delete_layers()
+        self.layers.clear()
+        debug "RESETTING LAYERS"
+      else:
+        debug "RE-USING LAYERS"
+
+      for i := 0; i < undofb.layers.size(); i++:
+        &sl := undofb.layers[i]
+        debug "UNDOING LAYER", sl.name
+
+        if layers_modified:
+          Layer layer(sl)
+          layer.fb = make_shared<framebuffer::FileFB>(sl.filename, sl.w, sl.h)
+          sl.snapshot->decompress(layer.fb->fbmem)
+          self.layers.push_back(layer)
+        else:
+          &layer := self.layers[i]
+          sl.snapshot->decompress(layer.fb->fbmem)
+
+      self.select_layer(undofb.cur_layer)
 
     void undo():
       if self.undo_stack.size() > 1:
@@ -418,19 +459,7 @@ namespace app_ui:
         undofb := self.undo_stack.back()
 
         debug "UNDO HAS", undofb.layers.size(), "LAYERS, CUR IS", undofb.cur_layer
-        self.delete_layers()
-        self.layers.clear()
-
-        for auto &sl : undofb.layers:
-          debug "UNDOING LAYER", sl.name
-          Layer layer(sl)
-          layer.fb = make_shared<framebuffer::FileFB>(sl.filename, sl.w, sl.h)
-          sl.snapshot->decompress(layer.fb->fbmem)
-          self.layers.push_back(layer)
-
-        self.select_layer(undofb.cur_layer)
-
-
+        restore_layers(undofb)
         ui::MainLoop::full_refresh()
 
     void redo():
@@ -439,16 +468,7 @@ namespace app_ui:
         self.redo_stack.pop_back()
 
         debug "REDO HAS", redofb.layers.size(), "LAYERS, CUR IS", redofb.cur_layer
-        self.delete_layers()
-        self.layers.clear()
-        for auto &sl : redofb.layers:
-          debug "REDOING LAYER", sl.name
-          Layer layer(sl)
-          layer.fb = make_shared<framebuffer::FileFB>(sl.filename, sl.w, sl.h)
-          sl.snapshot->decompress(layer.fb->fbmem)
-          self.layers.push_back(layer)
-        self.select_layer(redofb.cur_layer)
-
+        restore_layers(redofb)
 
         self.undo_stack.push_back(redofb)
         ui::MainLoop::full_refresh()
