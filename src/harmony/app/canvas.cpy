@@ -299,6 +299,9 @@ namespace app_ui:
 
     void load_project(string filename):
       reset_layer_dir()
+      self.delete_layers()
+      self.layers.clear()
+
       run_command("tar", {"-xvzf", filename, "-C", LAYER_DIR})
       load_project_from_dir(LAYER_DIR)
 
@@ -312,8 +315,6 @@ namespace app_ui:
       vector<string> filenames = util::lsdir(dir, ".raw")
       sort(filenames.begin(), filenames.end())
 
-      self.delete_layers()
-      self.layers.clear()
       for auto f : filenames:
         tokens := str_utils::split(f, '.')
         string name = unique_name("Layer")
