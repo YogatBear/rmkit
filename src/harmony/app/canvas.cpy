@@ -60,6 +60,7 @@ namespace app_ui:
   struct SaveState:
     vector<LayerState> layers
     int cur_layer
+    string project_name
   ;
 
 
@@ -402,6 +403,7 @@ namespace app_ui:
       ui::TaskQueue::add_task([&] {
         SaveState ss = {}
         ss.cur_layer = self.cur_layer
+        ss.project_name = self.project_name
         for auto &layer : layers:
           if layer.snapshot == NULL:
             layer.snapshot = make_shared<framebuffer::Snapshot>(w, h)
@@ -452,6 +454,7 @@ namespace app_ui:
           sl.snapshot->decompress(layer.fb->fbmem)
 
       self.select_layer(undofb.cur_layer)
+      self.project_name = undofb.project_name
 
     void undo():
       if self.undo_stack.size() > 1:
