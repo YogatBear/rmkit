@@ -294,7 +294,7 @@ namespace app_ui:
 
     void delete_layers():
       for int i = 0; i < layers.size(); i++:
-        self.delete_layer(i, true)
+        self.delete_layer(i, true /* allow empty */, false /* undoable */)
 
 
     void load_project(string filename):
@@ -527,14 +527,17 @@ namespace app_ui:
 
       return layer_id
 
-    void delete_layer(int i, bool allow_empty=false):
+    void delete_layer(int i, bool allow_empty=false, bool undoable=true):
       self.clear_layer(i)
       run_command("rm", { self.layers[i].fb->filename})
       layers.erase(layers.begin() + i)
-//      self.push_undo()
 
       if layers.size() == 0 and !allow_empty:
         self.select_layer(self.new_layer())
+
+      if undoable:
+        self.push_undo()
+
       mark_redraw()
 
     void clear_layer(int i):
