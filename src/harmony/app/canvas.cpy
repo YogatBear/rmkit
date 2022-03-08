@@ -316,9 +316,9 @@ namespace app_ui:
       self.layers.clear()
       for auto f : filenames:
         tokens := str_utils::split(f, '.')
-        name := "Layer " + to_string(layers.size())
+        string name = unique_name("Layer")
         if tokens.size() == 4:
-          name = tokens[2]
+          name = unique_name(tokens[2], false)
 
         Layer layer(
           self.w, self.h,
@@ -326,6 +326,7 @@ namespace app_ui:
             self.fb->width, self.fb->height),
           self.byte_size,
           true)
+
         layer.name = name
         layer.fb->dirty_area = {0, 0, self.fb->width, self.fb->height}
         self.layers.push_back(layer)
@@ -483,10 +484,30 @@ namespace app_ui:
         idx++
       return -1
 
+    string unique_name(string prefix, bool initial_suffix=true):
+      copy := 0
+      name := prefix
+      if initial_suffix:
+        name = prefix + " " + to_string(copy++)
+
+      while true:
+        unique := true
+        for auto &layer : self.layers:
+          if layer.name == name:
+            unique = false
+            break
+
+        if unique:
+          break
+
+        name = prefix + " " + to_string(copy++)
+
+      return name
+
     int new_layer(bool undoable=true):
       int layer_id = layers.size()
       char filename[PATH_MAX]
-      layer_name := "Layer " + to_string(layers.size())
+      layer_name := unique_name("Layer")
       sprintf(filename, "%s/layer.%i.%s.raw", LAYER_DIR, layer_id, layer_name.c_str())
       Layer layer(
         w, h,
